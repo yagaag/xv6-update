@@ -74,22 +74,83 @@ void page_fault_handler(void)
 {
     /* Current process struct */
     struct proc *p = myproc();
+    struct inode *ip;
+    struct elfhdr elf;
+    struct proghdr ph;
 
     /* Track whether the heap page should be brought back from disk or not. */
     bool load_from_disk = false;
 
     /* Find faulting address. */
-    uint64 faulting_addr = 0;
-    print_page_fault(p->name, faulting_addr);
-
+    uint64 stval = r_stval(); // Read the stval register to get faulting address
+    uint64 faulting_addr = PGROUNDDOWN(stval); // Address of the Page Fault
     /* Check if the fault address is a heap page. Use p->heap_tracker */
-    if (true) {
+    if (faulting_addr >= p->sz && faulting_addr < p->heap_tracker) {
         goto heap_handle;
     }
 
     /* If it came here, it is a page from the program binary that we must load. */
-    print_load_seg(faulting_addr, 0, 0);
+    print_page_fault(p->name, faulting_addr);
 
+    begin_op();
+    if((ip = namei(p->name)) == 0){
+        printf("Error");
+        return;
+    }
+    ilock(ip);
+
+    if(readi(ip, 0, (uint64)&elf, 0, sizeof(elf)) != sizeof(elf)) {
+        printf("Read Error");
+        return;
+    }
+        
+    if(elf.magic != ELF_MAGIC) {
+        printf("Not so magical");
+        return;
+    }
+
+    int sz = 0;
+    int i, off;
+    /* Iterate through program sections to find the program binary page */
+    for (i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)) {
+        if(readi(ip, 0, (uint64)&ph, off, sizeof(ph)) != sizeof(ph))
+            return;
+        if(ph.type != ELF_PROG_LOAD)
+            continue;
+        if(ph.memsz < ph.filesz)
+            return;
+        if(ph.vaddr + ph.memsz < ph.vaddr)
+            return;
+        if(ph.vaddr % PGSIZE != 0)
+            return;
+            
+        /* Check if faulting address belongs to this section */
+        uint64 section_end = ph.vaddr + ph.memsz;
+        if (faulting_addr >= ph.vaddr && faulting_addr < section_end) {
+            // printf("Found the faulting addr\n");
+            uint64 pg_offset = (faulting_addr - ph.vaddr) % PGSIZE;
+            uint64 load_addr = faulting_addr - pg_offset;
+            // printf("SZ  %x\n", sz);
+
+            /* Allocate a free physical page for the program binary page */
+            uint64 pg = uvmalloc(p->pagetable, sz, load_addr + PGSIZE, flags2perm(ph.flags));
+            if (pg == 0) {
+                printf("Page Fault Handler: uvmalloc failed\n");
+                break;
+            }
+            /* Load the required page from the program binary */
+            if (loadseg(p->pagetable, load_addr, ip, ph.off + pg_offset, PGSIZE) < 0) {
+                printf("Page Fault Handler: loadseg failed\n");
+                break;
+            }
+            print_load_seg(load_addr, load_addr + PGSIZE, PGSIZE);
+            break;
+        } 
+        sz = PGROUNDUP(sz + ph.memsz); 
+    }
+
+    iunlockput(ip);
+    end_op();
     /* Go to out, since the remainder of this code is for the heap. */
     goto out;
 

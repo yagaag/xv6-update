@@ -537,7 +537,7 @@ yield(void)
 }
 
 // A fork child's very first scheduling by scheduler()
-// will swtch to forkret.
+// will switch to forkret.
 void
 forkret(void)
 {
@@ -553,7 +553,7 @@ forkret(void)
     first = 0;
     fsinit(ROOTDEV);
   }
-
+  
   usertrapret();
 }
 

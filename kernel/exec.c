@@ -33,12 +33,14 @@ exec(char *path, char **argv)
   struct proc *p = myproc();
 
   /* CSE 536: (2.1) Check on-demand status. */
-  if (p->ondemand == true) {
+  if (strncmp(path, "/init", sizeof("/init")) != 0 && 
+      // strncmp(path, "cat", sizeof("cat")) != 0 &&
+      strncmp(path, "sh", sizeof("sh")) != 0) {
+    p->ondemand = true;
     print_ondemand_proc(path);
   }
 
   begin_op();
-
   if((ip = namei(path)) == 0){
     end_op();
     return -1;
@@ -68,6 +70,12 @@ exec(char *path, char **argv)
     if(ph.vaddr % PGSIZE != 0)
       goto bad;
 
+    if (p->ondemand) {
+        print_skip_section(path, ph.vaddr, ph.memsz);
+        sz = PGROUNDUP(sz + ph.memsz);
+        continue;
+    }
+
     uint64 sz1;
     if((sz1 = uvmalloc(pagetable, sz, ph.vaddr + ph.memsz, flags2perm(ph.flags))) == 0)
       goto bad;
@@ -75,6 +83,7 @@ exec(char *path, char **argv)
     if(loadseg(pagetable, ph.vaddr, ip, ph.off, ph.filesz) < 0)
       goto bad;
   }
+
   iunlockput(ip);
   end_op();
   ip = 0;
@@ -143,7 +152,6 @@ exec(char *path, char **argv)
     p->heap_tracker[i].loaded          = false;
   }
   p->resident_heap_pages = 0;
-
   return argc; // this ends up in a0, the first argument to main(argc, argv)
 
  bad:

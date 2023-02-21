@@ -3,3 +3,15 @@
 /install/qemu*
 /xv6-riscv
 .vscode
+*.d
+*.o
+*.asm
+*.sym
+*.S
+*.out
+*~
+_*
+bootblock
+entryother
+initcode
+kernel/kernel*
