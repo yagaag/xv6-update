@@ -7,11 +7,10 @@ char buf[512];
 void
 cat(int fd)
 {
-  int n = read(fd, buf, sizeof(buf));
-  printf("nvalda%d\n", n);
+  int n;
 
-  while(n > 0) {
-    printf("in while");
+  while((n = read(fd, buf, sizeof(buf))) > 0) {
+    printf("\nin while\n");
     if (write(1, buf, n) != n) {
       fprintf(2, "cat: write error\n");
       exit(1);
@@ -19,7 +18,7 @@ cat(int fd)
   }
   if(n < 0){
     printf("%d\n", n);
-    printf("Here is the error");
+    printf("Here is the error\n");
     fprintf(2, "cat: read error\n");
     exit(1);
   }

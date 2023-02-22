@@ -259,12 +259,12 @@ void track_heap(struct proc* p, uint64 start, int npages) {
   for (int i = 0; i < MAXHEAP; i++) {
     if (p->heap_tracker[i].addr == 0xFFFFFFFFFFFFFFFF) {
       p->heap_tracker[i].addr           = start + (i*PGSIZE);
-      p->heap_tracker[i].loaded         = 0;   
+      p->heap_tracker[i].loaded         = false;   
       p->heap_tracker[i].startblock     = -1;
 
       npages--;
       if (npages == 0) return;
-    } 
+    }
   }
   panic("Error: No more process heap pages allowed.\n");
 }
@@ -284,15 +284,20 @@ growproc(int n)
   /* CSE 536: For simplicity, I've made all allocations at page-level. */
   n = PGROUNDUP(n);
 
-  sz = p->sz;
-  if(n > 0){
-    if((sz = uvmalloc(p->pagetable, sz, sz + n, PTE_W)) == 0) {
-      return -1;
+  if(!p->ondemand) {
+    sz = p->sz;
+    if(n > 0){
+      if((sz = uvmalloc(p->pagetable, sz, sz + n, PTE_W)) == 0) {
+        return -1;
+      }
+    } else if(n < 0){
+      sz = uvmdealloc(p->pagetable, sz, sz + n);
     }
-  } else if(n < 0){
-    sz = uvmdealloc(p->pagetable, sz, sz + n);
+    p->sz = sz;
+  } else {
+    track_heap(p, p->sz, n/PGSIZE);
+    print_skip_heap_region(p->name, p->sz, n/PGSIZE);
   }
-  p->sz = sz;
   return 0;
 }
 
