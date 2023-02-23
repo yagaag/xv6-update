@@ -15,16 +15,10 @@
 int loadseg(pagetable_t pagetable, uint64 va, struct inode *ip, uint offset, uint sz);
 int flags2perm(int flags);
 
-int find_heap_page(struct proc* p, uint64 addr) {
-    // printf("finding heap page");
+int find_heap_page(struct proc* p, uint64 uvaddr) {
     for (int i=0; i<MAXHEAP; i++) {
-        uint64 start = p->heap_tracker[i].addr;
-        // printf("Start %d\n", start);
-        if (addr == start) {
+        if (uvaddr == p->heap_tracker[i].addr) {
             return i;
-        }
-        if (start == -1) {
-            return -1;
         }
     }
     return -1;
@@ -49,56 +43,148 @@ void init_psa_regions(void)
         psa_tracker[i] = false;
 }
 
+/* FIFO Algorithm to determine which page to evict */
 int fifo_page_eviction(struct proc* p) {
-    int least_idx = 0;
+    int least_idx = -1;
+    int loaded = -1;
     uint64 least_time = read_current_timestamp();
     for (int i=0; i<MAXHEAP; i++) {
-        if (p->heap_tracker[i].addr != 0xFFFFFFFFFFFFFFFF) {
-            continue;
+        if (p->heap_tracker[i].loaded) {
+            loaded = i;
+            if (p->heap_tracker[i].last_load_time < least_time) {
+                least_idx = i;
+                least_time = p->heap_tracker[i].last_load_time;
+            }
         }
-        if (p->heap_tracker[i].last_load_time < least_time) {
-            least_idx = i;
-            least_time = p->heap_tracker[i].last_load_time;
+    }
+    // Bug: Since read_current_timestamp() rounds off to a second,
+    // Sometimes, all pages have same timestamp. 
+    // In that case, evict the cronologically last loaded page.
+    if (least_idx < 0) {
+        return loaded;
+    }
+    return least_idx;
+}
+
+/* Working Set Algorithm to determine which page to evict */
+int working_set_page_eviction(struct proc* p) {
+    int least_idx = -1;
+    int loaded = -1;
+    uint64 least_time = read_current_timestamp();
+    for (int i=0; i<MAXHEAP; i++) {
+        if (p->heap_tracker[i].loaded) {
+            loaded = i;
+            if (p->heap_tracker[i].last_load_time < least_time) {
+                least_idx = i;
+                least_time = p->heap_tracker[i].last_load_time;
+            }
         }
+    }
+    // Bug: Since read_current_timestamp() rounds off to a second,
+    // Sometimes, all pages have same timestamp. 
+    // In that case, evict the cronologically last loaded page.
+    if (least_idx < 0) {
+        return loaded;
     }
     return least_idx;
 }
 
 /* Evict heap page to disk when resident pages exceed limit */
-void evict_page_to_disk(struct proc* p) {
+void evict_page_to_disk(struct proc* p, bool working_set) {
     /* Find free block */
-    int blockno = 0;
-    /* Find victim page using FIFO. */
-    int evict_idx = fifo_page_eviction(p);
+    int blockno = -1;
+    /* Find free PSA blocks */
+    int free_blocks = 0;
+    for (int i = 0; i < PSASIZE; i++) {
+        if (psa_tracker[i] == false) {
+            if (free_blocks == 0) {
+                blockno = i;
+            }
+            free_blocks++;
+            if (free_blocks == 4) {
+                break;
+            }
+        } else {
+            free_blocks = 0;
+            blockno = -1;
+        }
+    }
+    for (int i = blockno; i < blockno + 4; i++) {
+        psa_tracker[i] = true;
+    }
+    if (blockno < 0) {
+        printf("Cannot evict page. Not enough disk space");
+        return;
+    }
+    /* Find victim page using either FIFO or Working Set Algorithm */
+    int evict_idx;
+    if (working_set) {
+        evict_idx = working_set_page_eviction(p);
+    } else {
+        evict_idx = fifo_page_eviction(p);
+    }
+    p->heap_tracker[evict_idx].startblock = blockno;
     /* Print statement. */
-    print_evict_page(p->heap_tracker[evict_idx].addr, p->heap_tracker[evict_idx].startblock);
-    /* Read memory from the user to kernel memory first. */
-    
-    /* Write to the disk blocks. Below is a template as to how this works. There is
-     * definitely a better way but this works for now. :p */
-    struct buf* b;
-    b = bread(1, PSASTART+(blockno));
-        // Copy page contents to b.data using memmove.
-    bwrite(b);
-    brelse(b);
+    print_evict_page(p->heap_tracker[evict_idx].addr, blockno);
 
+    /* Read memory from the user to kernel memory first. */
+    char *kpage = kalloc();
+    if (kpage == 0) {
+        panic("Failed to allocate kernel page\n");
+    }
+    if (copyin(p->pagetable, kpage, p->heap_tracker[evict_idx].addr, PGSIZE) != 0) {
+        panic("Failed to copy page to kernel memory");
+    }
+
+    /* Write evict page to the chosen PSA blocks */
+    for (int i = 0; i < 4; i++) {
+        struct buf *b = bread(1, PSASTART + (blockno + i));
+        // Copy page contents to b->data using memmove
+        memmove(b->data, kpage + (i * BSIZE), BSIZE);
+        bwrite(b);
+        brelse(b);
+    }
+    kfree(kpage);
     /* Unmap swapped out page */
+    uvmunmap(p->pagetable, PGROUNDDOWN(p->heap_tracker[evict_idx].addr), 1, 0);
+
     /* Update the resident heap tracker. */
+    p->heap_tracker[evict_idx].loaded = false;
+    p->resident_heap_pages--;
 }
 
 /* Retrieve faulted page from disk. */
-void retrieve_page_from_disk(struct proc* p, uint64 uvaddr) {
+void retrieve_page_from_disk(struct proc* p, uint64 uvaddr, int heap_idx) {
     /* Find where the page is located in disk */
-
+    int blockno = p->heap_tracker[heap_idx].startblock;
     /* Print statement. */
-    print_retrieve_page(0, 0);
+    print_retrieve_page(uvaddr, blockno);
 
     /* Create a kernel page to read memory temporarily into first. */
-    
+    char *kpage = kalloc();
+    if(kpage == 0){
+        panic("Failed to allocate kernel page\n");
+    }
+
     /* Read the disk block into temp kernel page. */
+    for (int i = 0; i < 4; i++) {
+        struct buf *b = bread(1, PSASTART + (blockno + i));
+        // Copy page contents to kpage using memmove
+        memmove(kpage + (i * BSIZE), b->data, BSIZE);
+        brelse(b);
+    }
 
     /* Copy from temp kernel page to uvaddr (use copyout) */
+    if(copyout(p->pagetable, uvaddr, kpage, PGSIZE) != 0){
+        panic("Failed to copy page from kernel memory\n");
+    }
+    kfree(kpage);
 
+    /* Update heap tracker and psa_tracker */
+    p->heap_tracker[heap_idx].loaded = true;
+    for (int i = blockno; i < blockno + 4; i++) {
+        psa_tracker[i] = false;
+    }
 }
 
 void page_fault_handler(void) 
@@ -121,7 +207,7 @@ void page_fault_handler(void)
     /* Check if the fault address is a heap page. Use p->heap_tracker */
     int heap_idx = find_heap_page(p, faulting_addr);
     if (heap_idx >= 0) {
-        load_from_disk = p->heap_tracker[heap_idx].loaded;
+        load_from_disk = p->heap_tracker[heap_idx].startblock >= 0;
         goto heap_handle;
     }
 
@@ -181,26 +267,28 @@ void page_fault_handler(void)
 heap_handle:
     /* 2.4: Check if resident pages are more than heap pages. If yes, evict. */
     if (p->resident_heap_pages == MAXRESHEAP) {
-        evict_page_to_disk(p);
+        // Pass true for working set algorithm
+        evict_page_to_disk(p, false);
     }
 
     /* 2.3: Map a heap page into the process' address space. (Hint: check growproc) */
-    uint64 sz = p->sz;
-    if((sz = uvmalloc(p->pagetable, sz, sz + PGSIZE, PTE_W)) == 0) {
-        return;
+    if(uvmalloc(p->pagetable, faulting_addr, faulting_addr + PGSIZE, PTE_W) == 0) {
+        panic("Error allocating new page");
     }
-    p->sz = sz;
+    // if(mappages(p->pagetable, faulting_addr, PGSIZE, p->sz, PTE_W) != 0) {
+    //     panic("Error mapping faulting address");
+    // }
 
     /* 2.4: Update the last load time for the loaded heap page in p->heap_tracker. */
     p->heap_tracker[heap_idx].last_load_time = read_current_timestamp();
 
     /* 2.4: Heap page was swapped to disk previously. We must load it from disk. */
     if (load_from_disk) {
-        retrieve_page_from_disk(p, faulting_addr);
-        p->heap_tracker[heap_idx].loaded = false;
+        retrieve_page_from_disk(p, faulting_addr, heap_idx);
     }
 
     /* Track that another heap page has been brought into memory. */
+    p->heap_tracker[heap_idx].loaded = true;
     p->resident_heap_pages++;
 
 out:

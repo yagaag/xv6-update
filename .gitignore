@@ -15,4 +15,4 @@ bootblock
 entryother
 initcode
 kernel/kernel*
-*.img
+fs.img

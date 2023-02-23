@@ -351,8 +351,7 @@ uvmclear(pagetable_t pagetable, uint64 va)
   *pte &= ~PTE_U;
 }
 
-// CSE 536: mark a PTE invalid. For swapping 
-// pages in and out of memory.
+// CSE 536: mark a PTE invalid. For swapping pages in and out of memory.
 void
 uvminvalid(pagetable_t pagetable, uint64 va)
 {

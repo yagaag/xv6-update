@@ -284,8 +284,8 @@ growproc(int n)
   /* CSE 536: For simplicity, I've made all allocations at page-level. */
   n = PGROUNDUP(n);
 
+  sz = p->sz;
   if(!p->ondemand) {
-    sz = p->sz;
     if(n > 0){
       if((sz = uvmalloc(p->pagetable, sz, sz + n, PTE_W)) == 0) {
         return -1;
@@ -293,11 +293,12 @@ growproc(int n)
     } else if(n < 0){
       sz = uvmdealloc(p->pagetable, sz, sz + n);
     }
-    p->sz = sz;
   } else {
     track_heap(p, p->sz, n/PGSIZE);
     print_skip_heap_region(p->name, p->sz, n/PGSIZE);
+    sz = sz + n;
   }
+  p->sz = sz;
   return 0;
 }
 
