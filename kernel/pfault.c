@@ -75,7 +75,7 @@ int working_set_page_eviction(struct proc* p) {
         if (!p->heap_tracker[i].loaded) {
             continue;
         }
-        printf("Page %d Diff %d\n", i, read_current_timestamp() - p->heap_tracker[i].last_load_time);
+        // printf("Page %d Diff %d\n", i, read_current_timestamp() - p->heap_tracker[i].last_load_time);
         if (read_current_timestamp() - p->heap_tracker[i].last_load_time < WS_THRESHOLD) {
             p->heap_tracker[i].in_workingset = true;
             if (p->heap_tracker[i].last_load_time <= least_time_in_ws) {
@@ -271,7 +271,7 @@ heap_handle:
     /* 2.4: Check if resident pages are more than heap pages. If yes, evict. */
     if (p->resident_heap_pages == MAXRESHEAP) {
         // Pass true for working set algorithm
-        evict_page_to_disk(p, true);
+        evict_page_to_disk(p, false);
     }
 
     /* 2.3: Map a heap page into the process' address space. (Hint: check growproc) */
