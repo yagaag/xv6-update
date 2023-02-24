@@ -21,3 +21,4 @@
 /* CSE 536: heap-related definitions. */
 #define MAXHEAP                 1000     // maximum pages for heap allocation
 #define MAXRESHEAP              100      // maximum in-memory pages for heap allocation
+#define WS_THRESHOLD            30        // Working set time threshold in seconds

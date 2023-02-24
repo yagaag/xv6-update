@@ -49,12 +49,13 @@ int fifo_page_eviction(struct proc* p) {
     int loaded = -1;
     uint64 least_time = read_current_timestamp();
     for (int i=0; i<MAXHEAP; i++) {
-        if (p->heap_tracker[i].loaded) {
-            loaded = i;
-            if (p->heap_tracker[i].last_load_time < least_time) {
-                least_idx = i;
-                least_time = p->heap_tracker[i].last_load_time;
-            }
+        if (!p->heap_tracker[i].loaded) {
+            continue;
+        }
+        loaded = i;
+        if (p->heap_tracker[i].last_load_time < least_time) {
+            least_idx = i;
+            least_time = p->heap_tracker[i].last_load_time;
         }
     }
     // Bug: Since read_current_timestamp() rounds off to a second,
@@ -68,25 +69,27 @@ int fifo_page_eviction(struct proc* p) {
 
 /* Working Set Algorithm to determine which page to evict */
 int working_set_page_eviction(struct proc* p) {
-    int least_idx = -1;
-    int loaded = -1;
-    uint64 least_time = read_current_timestamp();
+    int least_idx_in_ws = -1;
+    uint64 least_time_in_ws = read_current_timestamp();
     for (int i=0; i<MAXHEAP; i++) {
-        if (p->heap_tracker[i].loaded) {
-            loaded = i;
-            if (p->heap_tracker[i].last_load_time < least_time) {
-                least_idx = i;
-                least_time = p->heap_tracker[i].last_load_time;
+        if (!p->heap_tracker[i].loaded) {
+            continue;
+        }
+        printf("Page %d Diff %d\n", i, read_current_timestamp() - p->heap_tracker[i].last_load_time);
+        if (read_current_timestamp() - p->heap_tracker[i].last_load_time < WS_THRESHOLD) {
+            p->heap_tracker[i].in_workingset = true;
+            if (p->heap_tracker[i].last_load_time <= least_time_in_ws) {
+                least_idx_in_ws = i;
+                least_time_in_ws = p->heap_tracker[i].last_load_time;
             }
         }
     }
-    // Bug: Since read_current_timestamp() rounds off to a second,
-    // Sometimes, all pages have same timestamp. 
-    // In that case, evict the cronologically last loaded page.
-    if (least_idx < 0) {
-        return loaded;
+    // If no page is part of the working set, evict the oldest page overall
+    if (least_idx_in_ws == -1) {
+        return fifo_page_eviction(p);
     }
-    return least_idx;
+    // Evict the oldest page in the working set
+    return least_idx_in_ws;
 }
 
 /* Evict heap page to disk when resident pages exceed limit */
@@ -268,7 +271,7 @@ heap_handle:
     /* 2.4: Check if resident pages are more than heap pages. If yes, evict. */
     if (p->resident_heap_pages == MAXRESHEAP) {
         // Pass true for working set algorithm
-        evict_page_to_disk(p, false);
+        evict_page_to_disk(p, true);
     }
 
     /* 2.3: Map a heap page into the process' address space. (Hint: check growproc) */
