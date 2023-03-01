@@ -261,7 +261,6 @@ void track_heap(struct proc* p, uint64 start, int npages) {
       p->heap_tracker[i].addr           = start + (i*PGSIZE);
       p->heap_tracker[i].loaded         = false;   
       p->heap_tracker[i].startblock     = -1;
-
       npages--;
       if (npages == 0) return;
     }

@@ -16,8 +16,6 @@ cat(int fd)
     }
   }
   if(n < 0){
-    printf("%d\n", n);
-    printf("Here is the error\n");
     fprintf(2, "cat: read error\n");
     exit(1);
   }

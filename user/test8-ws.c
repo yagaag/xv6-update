@@ -21,16 +21,19 @@ main(int argc, char *argv[])
         return -1;
     }
 
-    /* Write random numbers to the allocated heap regions. */
-
     int* a;
-    a = ((int*) (heappages));
-    *a = 0;
-    printf("Wrote data to first page and sleeping for 5 seconds...\n");
+    a = ((int*) (heappages + 99*PGSIZE));
+    *a = 99;
+    printf("Wrote data to page 100 and sleeping for 5 seconds...\n");
+    sleep(50);
+
+    a = ((int*) (heappages + 98*PGSIZE));
+    *a = 98;
+    printf("Wrote data to page 99 and sleeping for 5 seconds...\n");
     sleep(50);
 
     int count = 0;
-    for (int i = 1; i < (npages-1); i++) {
+    for (int i = 0; i < (npages-1); i++) {
         a = ((int*) (heappages + i*PGSIZE));
         for (int j = 0; j < PGSIZE/sizeof(int); j++) {
             *a = count;
@@ -38,15 +41,15 @@ main(int argc, char *argv[])
         }
         count++;
     }
-    printf("Wrote data to pages 2 to 100\n");
+    printf("Wrote data to pages 1 to 98\n");
     printf("Attempting to write to page 101\n");
     a = ((int*) (heappages + 100*PGSIZE));
     *a = count;
-    printf("\nIf prev. line reads 'EVICT: Page (67000) --> PSA (0 - 3)', TEST PASSED.\n");
-    printf("Although page 1 was the last accessed, \n");
-    printf("since it is not part of the working set (WS_THRESHOLD = 3 seconds), \n");
-    printf("Page 100 (VA 67000) should be the evicted page. \n");
-    printf("\nNOTE: If test fails, make sure that in kernel/pfault.c:274, \n");
+    printf("\nIf prev. line reads 'EVICT: Page (66000) --> PSA (0 - 3)', TEST PASSED.\n");
+    printf("Although page 100 was first written to, \n");
+    printf("since page 99 is also not part of the working set (WS_THRESHOLD = 3 seconds), \n");
+    printf("Page 99 (VA 66000) (numerically) should be the evicted page. \n");
+    printf("\nNOTE: If test fails, make sure that in kernel/pfault.c:261, \n");
     printf("true is passed to evict_page_to_disk() so that it uses the working set algorithm.");
     printf("\nIf test fails even otherwise, please consider partial points (◔ᴥ◔)\n");
 

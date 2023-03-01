@@ -15,15 +15,6 @@
 int loadseg(pagetable_t pagetable, uint64 va, struct inode *ip, uint offset, uint sz);
 int flags2perm(int flags);
 
-int find_heap_page(struct proc* p, uint64 uvaddr) {
-    for (int i=0; i<MAXHEAP; i++) {
-        if (uvaddr == p->heap_tracker[i].addr) {
-            return i;
-        }
-    }
-    return -1;
-}
-
 /* CSE 536: (2.4) read current time. */
 uint64 read_current_timestamp() {
   uint64 curticks = 0;
@@ -43,53 +34,49 @@ void init_psa_regions(void)
         psa_tracker[i] = false;
 }
 
+/* Find if virtual address is a heap page */
+int find_heap_page(struct proc* p, uint64 va) {
+    for (int i=0; i<MAXHEAP; i++) {
+        if (va == p->heap_tracker[i].addr) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 /* FIFO Algorithm to determine which page to evict */
 int fifo_page_eviction(struct proc* p) {
     int least_idx = -1;
-    int loaded = -1;
-    uint64 least_time = read_current_timestamp();
+    // Since read_current_timestamp() rounds off to 1/10th of a second,
+    // it is likely that all pages have same timestamp. So, add 1.
+    uint64 least_time = read_current_timestamp() + 1;
     for (int i=0; i<MAXHEAP; i++) {
         if (!p->heap_tracker[i].loaded) {
             continue;
         }
-        loaded = i;
         if (p->heap_tracker[i].last_load_time < least_time) {
             least_idx = i;
             least_time = p->heap_tracker[i].last_load_time;
         }
-    }
-    // Bug: Since read_current_timestamp() rounds off to a second,
-    // Sometimes, all pages have same timestamp. 
-    // In that case, evict the cronologically last loaded page.
-    if (least_idx < 0) {
-        return loaded;
     }
     return least_idx;
 }
 
 /* Working Set Algorithm to determine which page to evict */
 int working_set_page_eviction(struct proc* p) {
-    int least_idx_in_ws = -1;
-    uint64 least_time_in_ws = read_current_timestamp();
+    uint64 check_time = read_current_timestamp();
     for (int i=0; i<MAXHEAP; i++) {
         if (!p->heap_tracker[i].loaded) {
             continue;
         }
-        // printf("Page %d Diff %d\n", i, read_current_timestamp() - p->heap_tracker[i].last_load_time);
-        if (read_current_timestamp() - p->heap_tracker[i].last_load_time < WS_THRESHOLD) {
-            p->heap_tracker[i].in_workingset = true;
-            if (p->heap_tracker[i].last_load_time <= least_time_in_ws) {
-                least_idx_in_ws = i;
-                least_time_in_ws = p->heap_tracker[i].last_load_time;
-            }
+        // If current time - last access time > threshold, 
+        // the page is allowed to be evicted since it is not in working set
+        if (check_time - p->heap_tracker[i].last_load_time > WS_THRESHOLD) {
+            return i;
         }
     }
-    // If no page is part of the working set, evict the oldest page overall
-    if (least_idx_in_ws == -1) {
-        return fifo_page_eviction(p);
-    }
-    // Evict the oldest page in the working set
-    return least_idx_in_ws;
+    // If all pages are part of the working set, evict the oldest page overall
+    return fifo_page_eviction(p);
 }
 
 /* Evict heap page to disk when resident pages exceed limit */
@@ -278,9 +265,6 @@ heap_handle:
     if(uvmalloc(p->pagetable, faulting_addr, faulting_addr + PGSIZE, PTE_W) == 0) {
         panic("Error allocating new page");
     }
-    // if(mappages(p->pagetable, faulting_addr, PGSIZE, p->sz, PTE_W) != 0) {
-    //     panic("Error mapping faulting address");
-    // }
 
     /* 2.4: Update the last load time for the loaded heap page in p->heap_tracker. */
     p->heap_tracker[heap_idx].last_load_time = read_current_timestamp();
@@ -293,6 +277,7 @@ heap_handle:
     /* Track that another heap page has been brought into memory. */
     p->heap_tracker[heap_idx].loaded = true;
     p->resident_heap_pages++;
+    goto out;
 
 out:
     /* Flush stale page table entries. This is important to always do. */

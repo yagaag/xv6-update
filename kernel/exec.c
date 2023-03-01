@@ -150,7 +150,6 @@ exec(char *path, char **argv)
     p->heap_tracker[i].startblock      = -1;
     p->heap_tracker[i].last_load_time  = 0xFFFFFFFFFFFFFFFF;
     p->heap_tracker[i].loaded          = false;
-    p->heap_tracker[i].in_workingset   = false;
   }
   p->resident_heap_pages = 0;
   return argc; // this ends up in a0, the first argument to main(argc, argv)
