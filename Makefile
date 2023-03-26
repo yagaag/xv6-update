@@ -134,6 +134,7 @@ UPROGS=\
 	$U/_grind\
 	$U/_wc\
 	$U/_test1\
+	$U/_test_ulthread\
 	$U/_zombie\
 
 # swap disk

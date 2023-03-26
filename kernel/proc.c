@@ -500,6 +500,7 @@ sched(void)
   swtch(&p->context, &mycpu()->context);
   mycpu()->intena = intena;
 }
+// 6029263314
 
 // Give up the CPU for one scheduling round.
 void
