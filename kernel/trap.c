@@ -220,6 +220,7 @@ devintr()
 
     return 2;
   } else {
+    printf("%d\n", scause);
     return 0;
   }
 }

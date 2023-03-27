@@ -127,6 +127,10 @@ void ulthread_schedule(void) {
             printf("No thread to schedule. Exiting...\n");
             return;
         }
+        /* Make yielding thread runnable for subsequent schedules */
+        if (t_list.threads[t_list.yield_tid].state == YIELD) {
+            t_list.threads[t_list.yield_tid].state = RUNNABLE;
+        }
         /* Add this statement to denote which thread-id is being scheduled next */
         printf("[*] ultschedule (next tid: %d)\n", tid);
         struct ulthread *r_thread = &t_list.threads[tid];
@@ -141,6 +145,7 @@ void ulthread_yield(void) {
     printf("[*] ultyield(tid: %d)\n", t_list.current);
     struct ulthread *c_thread = &t_list.threads[t_list.current];
     c_thread->state = YIELD;
+    t_list.yield_tid = t_list.current;
     ulthread_context_switch(&c_thread->context, &t_list.threads[0].context);
 }
 

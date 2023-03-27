@@ -51,6 +51,7 @@ struct ulthread_list {
   int total;                  // total number of threads currently
   int so_far;                 // total number of threads ever
   int current;                // index of the current thread
+  int yield_tid;              // keep track of the thread that is yielding
   struct ulthread threads[MAXULTHREADS]; // array of threads
   enum ulthread_scheduling_algorithm algorithm; // The scheduling algorithm to use
 };
