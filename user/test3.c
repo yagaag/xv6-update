@@ -14,11 +14,8 @@
 /* Stack region for different threads */
 char stacks[PGSIZE*MAXULTHREADS];
 
-void ul_start_func(void) {
-    /* Start the thread here. */
-    for (int i = 0; i < 1000; i++);
-
-    printf("[.] started the thread function (tid = %d) \n", get_current_tid());
+void ul_start_func(int a1) {
+    printf("[.] started the thread function (tid = %d, a1 = %d) \n", get_current_tid(), a1);
 
     /* Notify for a thread exit. */
     ulthread_destroy();
@@ -34,12 +31,12 @@ main(int argc, char *argv[])
     ulthread_init(ROUNDROBIN);
 
     /* Create a user-level thread */
-    uint64 args[6] = {0,0,0,0,0,0};    
+    uint64 args[6] = {1,1,1,1,0,0};
     ulthread_create((uint64) ul_start_func, (uint64) stacks+PGSIZE, args, -1);
 
-    /* Schedule some of the threads */
+    /* Schedule all of the threads */
     ulthread_schedule();
 
-    printf("[*] User-Level Threading Test #1 Complete.\n");
+    printf("[*] User-Level Threading Test #3 (Arguments Checking) Complete.\n");
     return 0;
 }

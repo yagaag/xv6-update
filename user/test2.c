@@ -15,9 +15,6 @@
 char stacks[PGSIZE*MAXULTHREADS];
 
 void ul_start_func(void) {
-    /* Start the thread here. */
-    for (int i = 0; i < 1000; i++);
-
     printf("[.] started the thread function (tid = %d) \n", get_current_tid());
 
     /* Notify for a thread exit. */
@@ -31,15 +28,16 @@ main(int argc, char *argv[])
     memset(&stacks, 0, sizeof(stacks));
 
     /* Initialize the user-level threading library */
-    ulthread_init(ROUNDROBIN);
+    ulthread_init(PRIORITY);
 
     /* Create a user-level thread */
-    uint64 args[6] = {0,0,0,0,0,0};    
-    ulthread_create((uint64) ul_start_func, (uint64) stacks+PGSIZE, args, -1);
+    uint64 args[6] = {0,0,0,0,0,0};
+    for (int i = 0; i < 10; i++)
+        ulthread_create((uint64) ul_start_func, (uint64) (stacks+((i+1)*PGSIZE)), args, i%10);
 
-    /* Schedule some of the threads */
+    /* Schedule all of the threads */
     ulthread_schedule();
 
-    printf("[*] User-Level Threading Test #1 Complete.\n");
+    printf("[*] User-Level Threading Test #2 (Priority Scheduling) Complete.\n");
     return 0;
 }
