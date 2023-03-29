@@ -15,12 +15,8 @@
 char stacks[PGSIZE*MAXULTHREADS];
 
 void ul_start_func(void) {
-    int start_time = ctime();
-    for(;;) {
-        if((ctime() - start_time) > 10000) {
-            ulthread_yield();
-        }
-    }
+   ulthread_yield();
+   ulthread_destroy();
 }
 
 int
@@ -30,19 +26,19 @@ main(int argc, char *argv[])
     memset(&stacks, 0, sizeof(stacks));
 
     /* Initialize the user-level threading library */
-    ulthread_init(ROUNDROBIN);
+    ulthread_init(PRIORITY);
 
-    printf("Testing yield:\n");
+    printf("Testing priority-based scheduling:\n");
 
     /* Create a user-level thread */
     uint64 args[6] = {0,0,0,0,0,0};  
     for (int i=0; i<8; i++) {
-        ulthread_create((uint64) ul_start_func, (uint64) (stacks + PGSIZE + i*(PGSIZE)), args, -1);
+        ulthread_create((uint64) ul_start_func, (uint64) (stacks + PGSIZE + i*(PGSIZE)), args, i);
     }
 
     /* Schedule threads */
     ulthread_schedule();
 
-    printf("[*] Thread Yield Test Complete.\n");
+    printf("[*] Priority Scheduling Test Complete.\n");
     return 0;
 }
