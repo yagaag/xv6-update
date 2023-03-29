@@ -14,6 +14,12 @@ ulthread_context_switch:
         sd s9, 88(a0)
         sd s10, 96(a0)
         sd s11, 104(a0)
+        sd a0, 112(a0)
+        sd a1, 120(a0)
+        sd a2, 128(a0)
+        sd a3, 136(a0)
+        sd a4, 144(a0)
+        sd a5, 152(a0)
 
         ld ra, 0(a1)
         ld sp, 8(a1)
@@ -29,5 +35,12 @@ ulthread_context_switch:
         ld s9, 88(a1)
         ld s10, 96(a1)
         ld s11, 104(a1)
+        ld a0, 112(a1)
+        ld a2, 128(a1)
+        ld a3, 136(a1)
+        ld a4, 144(a1)
+        ld a5, 152(a1)
+
+        ld a1, 120(a1)
         
         ret

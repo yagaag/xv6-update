@@ -113,6 +113,12 @@ bool ulthread_create(uint64 start, uint64 stack, uint64 args[], int priority) {
     memset(&thread->context, 0, sizeof(thread->context));
     thread->context.sp = stack;
     thread->context.ra = start;
+    thread->context.a0 = args[0];
+    thread->context.a1 = args[1];
+    thread->context.a2 = args[2];
+    thread->context.a3 = args[3];
+    thread->context.a4 = args[4];
+    thread->context.a5 = args[5];
     t_list.total++;
     t_list.so_far++;
     return true;
