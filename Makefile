@@ -136,6 +136,8 @@ UPROGS=\
 	$U/_test1\
 	$U/_test2\
 	$U/_test3\
+	$U/_test4\
+	$U/_test5\
 	$U/_test_fcfs\
 	$U/_test_priority\
 	$U/_test_multithread\
