@@ -1,8 +1,5 @@
 $ test_fcfs
 Testing first-come-first-serve scheduling:
-Thread 1 should execute once and get destroyed
-Thread 2 should be scheduled twice before getting destroyed
-Thread 8 should be scheduled eight times before yielding at the end
 [*] ultcreate(tid: 1, ra: 0x0000000000000000, sp: 0x0000000000003010)
 [*] ultcreate(tid: 2, ra: 0x0000000000000000, sp: 0x0000000000004010)
 [*] ultcreate(tid: 3, ra: 0x0000000000000000, sp: 0x0000000000005010)

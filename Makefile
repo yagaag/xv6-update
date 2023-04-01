@@ -139,8 +139,9 @@ UPROGS=\
 	$U/_test4\
 	$U/_test5\
 	$U/_test_fcfs\
-	$U/_test_priority\
 	$U/_test_multithread\
+	$U/_test_priority\
+	$U/_test_thread_create\
 	$U/_test_yield\
 	$U/_zombie\
 

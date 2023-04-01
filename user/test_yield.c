@@ -16,9 +16,16 @@ char stacks[PGSIZE*MAXULTHREADS];
 
 void ul_start_func(void) {
     int start_time = ctime();
+    int scheduled_rounds = 0;
     for(;;) {
         if((ctime() - start_time) > 10000) {
-            ulthread_yield();
+            if((ctime() - start_time) > 100000) {
+                scheduled_rounds++;
+                ulthread_yield();
+            }
+        }
+        if (scheduled_rounds == 5) {
+            ulthread_destroy();
         }
     }
 }
@@ -34,9 +41,9 @@ main(int argc, char *argv[])
 
     printf("Testing yield:\n");
 
-    /* Create a user-level thread */
+    /* Create user-level threads */
     uint64 args[6] = {0,0,0,0,0,0};  
-    for (int i=0; i<8; i++) {
+    for (int i=0; i<5; i++) {
         ulthread_create((uint64) ul_start_func, (uint64) (stacks + PGSIZE + i*(PGSIZE)), args, -1);
     }
 

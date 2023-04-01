@@ -20,7 +20,6 @@ enum ulthread_scheduling_algorithm {
 struct ulthread_context {
   uint64 ra;
   uint64 sp;
-
   // callee-saved
   uint64 s0;
   uint64 s1;
@@ -50,12 +49,11 @@ struct ulthread {
   uint64 *start_func;           // The start function of the thread
   char name[16];               // Thread name (debugging)
   int priority;                // Priority of the thread
-  int reached_at;              // Thread creation time for FCFS
+  int created_at;              // Thread creation time for FCFS
 };
 
 struct ulthread_list {
   int total;                  // total number of threads currently
-  int so_far;                 // total number of threads ever
   int current;                // index of the current thread
   int yield_tid;              // keep track of the thread that is yielding
   struct ulthread threads[MAXULTHREADS]; // array of threads

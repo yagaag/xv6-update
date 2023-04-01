@@ -13,15 +13,8 @@
 
 /* Stack region for different threads */
 char stacks[PGSIZE*MAXULTHREADS];
-int t_count = 0;
 
 void ul_start_func(void) {
-    if (t_count < 15) {
-        uint64 args[6] = {0,0,0,0,0,0};
-        ulthread_create((uint64) ul_start_func, (uint64) (stacks + PGSIZE + t_count*(PGSIZE)), args, -1);
-        t_count++;
-    }
-    ulthread_destroy();
 }
 
 int
@@ -31,20 +24,15 @@ main(int argc, char *argv[])
     memset(&stacks, 0, sizeof(stacks));
 
     /* Initialize the user-level threading library */
-    ulthread_init(FCFS);
+    ulthread_init(ROUNDROBIN);
 
-    printf("Testing first-come-first-serve scheduling:\n");
+    printf("Testing thread creation:\n");
 
-    /* Create a user-level thread */
-    uint64 args[6] = {0,0,0,0,0,0};  
-    for (int i=0; i<5; i++) {
+    /* Create more than max possible threads user-level thread */
+    uint64 args[6] = {0,0,0,0,0,0};
+    for (int i=0; i<MAXULTHREADS; i++) {
         ulthread_create((uint64) ul_start_func, (uint64) (stacks + PGSIZE + i*(PGSIZE)), args, -1);
-        t_count++;
     }
-
-    /* Schedule some of the threads */
-    ulthread_schedule();
-
-    printf("[*] First-Come-First-Serve Scheduling Test Complete.\n");
+    
     return 0;
 }

@@ -55,12 +55,12 @@ int priority_select(void) {
 
 int fcfs_select(void) {
     int fc_idx = 0;
-    int fc_val = 1000;
+    int fc_val = ctime();
     for (int i=1; i<MAXULTHREADS; i++) {
         if (t_list.threads[i].state == RUNNABLE) {
-            if (t_list.threads[i].reached_at < fc_val) {
+            if (t_list.threads[i].created_at < fc_val) {
                 fc_idx = i;
-                fc_val = t_list.threads[i].reached_at;
+                fc_val = t_list.threads[i].created_at;
             }
         }
     }
@@ -90,7 +90,6 @@ void ulthread_init(int schedalgo) {
     s_thread->context.sp = s_thread->stack + PGSIZE;
     s_thread->context.ra = (uint64)ulthread_schedule;
     t_list.total = 1;
-    t_list.so_far = 1;
     t_list.current = 0;
     t_list.algorithm = schedalgo;
 }
@@ -109,7 +108,7 @@ bool ulthread_create(uint64 start, uint64 stack, uint64 args[], int priority) {
     thread->stack = stack;
     thread->start_func = start;
     thread->priority = priority;
-    thread->reached_at = t_list.so_far;
+    thread->created_at = ctime();
     memset(&thread->context, 0, sizeof(thread->context));
     thread->context.sp = stack;
     thread->context.ra = start;
@@ -120,7 +119,6 @@ bool ulthread_create(uint64 start, uint64 stack, uint64 args[], int priority) {
     thread->context.a4 = args[4];
     thread->context.a5 = args[5];
     t_list.total++;
-    t_list.so_far++;
     return true;
 }
 
@@ -130,8 +128,13 @@ void ulthread_schedule(void) {
     for (;;) {
         int tid = select_thread();
         if (tid == 0) {
-            printf("No thread to schedule. Exiting...\n");
-            return;
+            if (t_list.threads[t_list.yield_tid].state == YIELD) {
+                tid = t_list.yield_tid;
+            }
+            else {
+                printf("No thread to schedule. Exiting...\n");
+                return;
+            }
         }
         /* Make yielding thread runnable for subsequent schedules */
         if (t_list.threads[t_list.yield_tid].state == YIELD) {

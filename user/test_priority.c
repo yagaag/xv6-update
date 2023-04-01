@@ -30,7 +30,7 @@ main(int argc, char *argv[])
 
     printf("Testing priority-based scheduling:\n");
 
-    /* Create a user-level thread */
+    /* Create user-level threads */
     uint64 args[6] = {0,0,0,0,0,0};  
     for (int i=0; i<8; i++) {
         ulthread_create((uint64) ul_start_func, (uint64) (stacks + PGSIZE + i*(PGSIZE)), args, i);
