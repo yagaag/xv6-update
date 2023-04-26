@@ -53,17 +53,22 @@ struct vm_virtual_state {
     struct vm_reg registers;
 };
 
+// In your ECALL, add the following for prints
+// struct proc* p = myproc();
+// printf("(EC at %p)\n", p->trapframe->epc);
+
 void trap_and_emulate(void) {
     /* Comes here when a VM tries to execute a supervisor instruction. */
-
-    printf("holabol\n");
-
+    uint64 addr     = 0;
     uint32 op       = 0;
     uint32 rd       = 0;
+    uint32 funct3   = 0;
     uint32 rs1      = 0;
-    uint32 upper    = 0;
+    uint32 uimm     = 0;
 
-    printf("[PI] op = %x, rd = %x, rs1 = %x, upper = %x\n", op, rd, rs1, upper);
+    /* Print the statement */
+    printf("(PI at %p) op = %x, rd = %x, funct3 = %x, rs1 = %x, uimm = %x\n", 
+                addr, op, rd, funct3, rs1, uimm);
 }
 
 void trap_and_emulate_init(void) {
