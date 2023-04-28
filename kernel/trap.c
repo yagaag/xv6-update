@@ -29,44 +29,6 @@ trapinithart(void)
   w_stvec((uint64)kernelvec);
 }
 
-void redirect_traps(struct trapframe *tf) {
-    // uint64 sepc = r_sepc();
-    // printf("Reaching redirect\n");
-    printf("VVE, %d\n", tf->epc);
-    printf("VVE0, %d\n", tf->a7);
-
-    uint64 instr;
-    if (fetchaddr(tf->epc, (uint64 *)&instr) == -1) {
-        printf("Error fetching instruction\n");
-    }
-
-    // Check the instruction being executed
-    // uint64 instr;
-    // if (copyin(myproc()->pagetable, (char*)&instr, (uint64)tf->epc, sizeof(uint32)) != 0) {
-    //   printf("problem\n");
-    // }
-    // uint64 instr = sepc;
-    printf("SEPC: %x\n", instr);
-
-    uint64* instr_ptr = (uint64 *) instr;
-    uint64 instr2 = *instr_ptr;
-    printf("SEPC2: %x\n", instr2);
-
-    // Check for csrr, csrw, sret, mret, and ecall instructions
-    // int is_csrr = (instr & 0xFFFFF07F) == 0xC0002073;
-    // int is_csrw = (instr & 0xFFFFF07F) == 0xC0000073;
-    // int is_sret = instr == 0x10200073;
-    // int is_mret = instr == 0x30200073;
-    // int is_ecall = instr == 0x00000073;
-
-    // // If the instruction is a privileged instruction, redirect the trap
-    // if (is_csrr || is_csrw || is_sret || is_mret || is_ecall) {
-    //     // exec_mode = S_MODE; // Switch to Supervisor-mode
-    //     trap_and_emulate(); // Redirect trap to trap_and_emulate()
-    //     // exec_mode = U_MODE; // Switch back to User-mode
-    // }
-}
-
 //
 // handle an interrupt, exception, or system call from user space.
 // called from trampoline.S
@@ -87,38 +49,36 @@ usertrap(void)
   
   // save user program counter.
   p->trapframe->epc = r_sepc();
-
-  struct trapframe *tf = p->trapframe;
-
-  // Check if it is a trap for a privileged instruction
   uint64 c = r_scause();
   printf("SCAUSE: %d\n", c);
-  printf("THISS %x\n", p->trapframe->epc);
-  if(strncmp(p->name, "vm-", 3) == 0 && (c == 2)) {
-      redirect_traps(tf);
-  } else {
-    if(r_scause() == 8){
-      // system call
-      if(killed(p))
-        exit(-1);
+  if(c == 8){
+    // system call
+    if(killed(p))
+      exit(-1);
 
-      // sepc points to the ecall instruction,
-      // but we want to return to the next instruction.
-      p->trapframe->epc += 4;
+    // sepc points to the ecall instruction,
+    // but we want to return to the next instruction.
+    p->trapframe->epc += 4;
 
-      // an interrupt will change sepc, scause, and sstatus,
-      // so enable only now that we're done with those registers.
+    // an interrupt will change sepc, scause, and sstatus,
+    // so enable only now that we're done with those registers.
+    intr_on();
+
+    syscall();
+  } else if((which_dev = devintr()) != 0){
+    // ok
+  } else if(strncmp(p->name, "vm-", 3) == 0) { // Check if it is a trap for a privileged instruction
       intr_on();
-
-      syscall();
-    } else if((which_dev = devintr()) != 0){
-      // ok
-      // printf("this cause, %d\n", c);
-    } else {
-      printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
-      printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
-      setkilled(p);
-    }
+      if (c == 13 || c == 15) {
+        // ok
+      } else {
+        trap_and_emulate();
+      }
+      p->trapframe->epc += 4;
+  } else {
+    printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
+    printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+    setkilled(p);
   }
 
   if(killed(p))
@@ -266,4 +226,3 @@ devintr()
     return 0;
   }
 }
-
