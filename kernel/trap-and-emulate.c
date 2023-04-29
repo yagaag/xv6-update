@@ -167,7 +167,7 @@ void trap_and_emulate_init(void) {
     vm.mvendorid = 0x637365353336; // cse536
     vm.marchid = 0;
     vm.mimpid = 0;
-    vm.mhartid = 0x203;
+    vm.mhartid = 0;
     vm.mstatus = 0;
     vm.medeleg = 0;
     vm.mideleg = 0;
@@ -218,9 +218,21 @@ void trap_and_emulate_init(void) {
     vm.registers.mode = MACHINE_MODE;
 }
 
-// In your ECALL, add the following for prints
-// struct proc* p = myproc();
-// printf("(EC at %p)\n", p->trapframe->epc);
+int check_access(uint32 uimm) {
+    if (vm.registers.mode == USER_MODE && uimm > 0x50)
+        return 0;
+    if (vm.registers.mode == SUPERVISOR_MODE && uimm > 0x200) 
+        return 0;
+    return 1;
+}
+
+void trap_and_emulate_ecall() {
+    struct proc *p = myproc();
+    printf("(EC at %p)\n", p->trapframe->epc);
+    vm.sepc = p->trapframe->epc;
+    p->trapframe->epc = vm.stvec;
+    vm.registers.mode = SUPERVISOR_MODE;
+}
 
 void trap_and_emulate(void) {
     /* Comes here when a VM tries to execute a supervisor instruction. */
@@ -229,9 +241,12 @@ void trap_and_emulate(void) {
     struct trapframe *tf = p->trapframe;
     uint32 instr;
     if (copyin(p->pagetable, (char *)&instr, tf->epc, sizeof(instr))) {
-        printf("prob");
+        printf("prob\n");
     }
-    printf("INSTR: %p\n", instr);
+    // printf("INSTR: %p\n", instr);
+
+    // printf("Checking 1 %x\n", vm.stvec);
+    // printf("Checking 2 %x\n", vm.sepc);
 
     uint64 addr     = tf->epc;
     uint32 op       = instr & 0x7F;
@@ -246,24 +261,34 @@ void trap_and_emulate(void) {
     printf("(PI at %p) op = %x, rd = %x, funct3 = %x, rs1 = %x, uimm = %x\n", 
                 addr, op, rd, funct3, rs1, uimm);
 
-    if (addr == 0x76) {
+    if (!check_access(uimm)) {
+        printf("Illegal register access! 😈\n");
+        printf("Killing Guest OS 🤺\n");
+        setkilled(p);
+        return;
+    }
+
+    if (addr == 0x424) {
         panic("Stop\n");
     }
     
-    if (funct3 == 2) { // csrr
-        // printf("A1: %x\n", tf->a1);
-        *reg_mappings(tf, rd) = *csr_mappings[uimm];
-        // printf("A1: %x\n", tf->a1);
-    } else if (funct3 == 1) { // csrw
-        *csr_mappings[uimm] = *reg_mappings(tf, rs1);
-    } else { // mret, sret, ecall
-        if (uimm == 0x302) { // mret
-            vm.registers.mode = SUPERVISOR_MODE;
-        } else if (uimm == 0x102) { // sret
-            vm.registers.mode = USER_MODE;
-        } else { // ecall
-
+    if (op == 0x73) {
+        if (funct3 == 2) { // csrr
+            *reg_mappings(tf, rd) = *csr_mappings[uimm];
+            p->trapframe->epc += 4;
+        } else if (funct3 == 1) { // csrw
+            *csr_mappings[uimm] = *reg_mappings(tf, rs1);
+            p->trapframe->epc += 4;
+        } else { // mret, sret, ecall
+            if (uimm == 0x302) { // mret
+                vm.registers.mode = SUPERVISOR_MODE;
+                p->trapframe->epc = vm.mepc;
+            } else if (uimm == 0x102) { // sret
+                vm.registers.mode = USER_MODE;
+                p->trapframe->epc = vm.sepc;
+            } else { // ecall
+                p->trapframe->epc = vm.stvec;
+            }
         }
     }
-
 }

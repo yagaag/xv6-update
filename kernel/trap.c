@@ -49,32 +49,33 @@ usertrap(void)
   
   // save user program counter.
   p->trapframe->epc = r_sepc();
-  uint64 c = r_scause();
-  printf("SCAUSE: %d\n", c);
-  if(c == 8){
+  // uint64 c = r_scause();
+  // if (c != 2 && c!=8)
+  //   printf("SCAUSE: %d\n", c);
+  if(r_scause() == 8) {
     // system call
     if(killed(p))
       exit(-1);
 
-    // sepc points to the ecall instruction,
-    // but we want to return to the next instruction.
-    p->trapframe->epc += 4;
+    if(strncmp(p->name, "vm-", 3) == 0) {
+      trap_and_emulate_ecall();
+    }
+    else {
+      // sepc points to the ecall instruction,
+      // but we want to return to the next instruction.
+      p->trapframe->epc += 4;
 
-    // an interrupt will change sepc, scause, and sstatus,
-    // so enable only now that we're done with those registers.
-    intr_on();
+      // an interrupt will change sepc, scause, and sstatus,
+      // so enable only now that we're done with those registers.
+      intr_on();
 
-    syscall();
-  } else if((which_dev = devintr()) != 0){
+      syscall();
+    }
+  } else if((which_dev = devintr()) != 0) {
     // ok
   } else if(strncmp(p->name, "vm-", 3) == 0) { // Check if it is a trap for a privileged instruction
-      intr_on();
-      if (c == 13 || c == 15) {
-        // ok
-      } else {
-        trap_and_emulate();
-      }
-      p->trapframe->epc += 4;
+    trap_and_emulate();
+    intr_on();
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());

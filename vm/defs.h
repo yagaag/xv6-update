@@ -35,6 +35,7 @@ uint64          read_kernel_elf(void);
 
 // kernel.c
 void            kernel_entry(void);
+// void            create_process(void);
 
 // process.c
 void            process_entry(void);
