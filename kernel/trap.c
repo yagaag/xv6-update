@@ -49,18 +49,15 @@ usertrap(void)
   
   // save user program counter.
   p->trapframe->epc = r_sepc();
-  // uint64 c = r_scause();
-  // if (c != 2 && c!=8)
-  //   printf("SCAUSE: %d\n", c);
   if(r_scause() == 8) {
-    // system call
+    // system call 
     if(killed(p))
       exit(-1);
 
-    if(strncmp(p->name, "vm-", 3) == 0) {
+    if(p->proc_te_vm) {
       trap_and_emulate_ecall();
-    }
-    else {
+      intr_on();
+    } else {
       // sepc points to the ecall instruction,
       // but we want to return to the next instruction.
       p->trapframe->epc += 4;
@@ -73,7 +70,7 @@ usertrap(void)
     }
   } else if((which_dev = devintr()) != 0) {
     // ok
-  } else if(strncmp(p->name, "vm-", 3) == 0) { // Check if it is a trap for a privileged instruction
+  } else if(p->proc_te_vm) { // Check if it is a trap for a privileged instruction
     trap_and_emulate();
     intr_on();
   } else {

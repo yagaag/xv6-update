@@ -158,7 +158,9 @@ freeproc(struct proc *p)
   if (strncmp(p->name, "vm-", 3) == 0) {
     // CSE 536: Also unmap the VM memory region
     uint64 memaddr_start = 0x80000000;
-    uint64 memaddr_count = 1024;
+    uint64 memaddr_count = p->unmapped_pages;
+    if (memaddr_count < 1024)
+      printf("Unmapping remaining %d pages...\n", memaddr_count);
     uvmunmap(p->pagetable, memaddr_start, memaddr_count, 0);
   }
 

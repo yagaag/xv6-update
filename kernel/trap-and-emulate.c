@@ -62,13 +62,6 @@ struct vm_virtual_state {
 
     // PMP
     uint64 pmpcfg0;
-    uint64 pmpcfg2;
-    uint64 pmpcfg4;
-    uint64 pmpcfg6;
-    uint64 pmpcfg8;
-    uint64 pmpcfg10;
-    uint64 pmpcfg12;
-    uint64 pmpcfg14;
     uint64 pmpaddr0;
     uint64 pmpaddr1;
     uint64 pmpaddr2;
@@ -82,6 +75,7 @@ struct vm_virtual_state {
 };
 
 static struct vm_virtual_state vm;
+static pagetable_t pmp_pagetable;
 
 static uint64 *csr_mappings[] = {
     [CSR_ustatus]       &vm.ustatus,
@@ -124,13 +118,6 @@ static uint64 *csr_mappings[] = {
     // [CSR_mtinst]        &vm.mtinst,
     // [CSR_mtval2]        &vm.mtval2,
     [CSR_pmpcfg0]       &vm.pmpcfg0,
-    [CSR_pmpcfg2]       &vm.pmpcfg2,
-    [CSR_pmpcfg4]       &vm.pmpcfg4,
-    [CSR_pmpcfg6]       &vm.pmpcfg6,
-    [CSR_pmpcfg8]       &vm.pmpcfg8,
-    [CSR_pmpcfg10]      &vm.pmpcfg10,
-    [CSR_pmpcfg12]      &vm.pmpcfg12,
-    [CSR_pmpcfg14]      &vm.pmpcfg14,
     [CSR_pmpaddr0]      &vm.pmpaddr0,
     [CSR_pmpaddr1]      &vm.pmpaddr1,
     [CSR_pmpaddr2]      &vm.pmpaddr2,
@@ -164,7 +151,7 @@ static uint64* reg_mappings(struct trapframe *tf, uint32 reg) {
 
 void trap_and_emulate_init(void) {
     /* Create and initialize all state for the VM */
-    vm.mvendorid = 0x637365353336; // cse536
+    vm.mvendorid = 0xC5E536; // cse536
     vm.marchid = 0;
     vm.mimpid = 0;
     vm.mhartid = 0;
@@ -197,15 +184,8 @@ void trap_and_emulate_init(void) {
     vm.utval = 0;
     vm.uip = 0;
     
-    vm.pmpcfg0 = 0;
-    vm.pmpcfg2 = 0;
-    vm.pmpcfg4 = 0;
-    vm.pmpcfg6 = 0;
-    vm.pmpcfg8 = 0;
-    vm.pmpcfg10 = 0;
-    vm.pmpcfg12 = 0;
-    vm.pmpcfg14 = 0;
-    vm.pmpaddr0 = 0;
+    vm.pmpcfg0 = 0x0;
+    vm.pmpaddr0 = 0x80400000;
     vm.pmpaddr1 = 0;
     vm.pmpaddr2 = 0;
     vm.pmpaddr3 = 0;
@@ -218,7 +198,11 @@ void trap_and_emulate_init(void) {
     vm.registers.mode = MACHINE_MODE;
 }
 
-int check_access(uint32 uimm) {
+int check_access(uint32 uimm, uint32 funct3) {
+    if (uimm == 0xf11 && funct3 == 2) {// CSE 536: Allow read for mvendorid
+        printf("It was mentioned that mvendorid should be readable in all modes\n");
+        return 1;
+    }
     if (vm.registers.mode == USER_MODE && uimm > 0x50)
         return 0;
     if (vm.registers.mode == SUPERVISOR_MODE && uimm > 0x200) 
@@ -226,12 +210,42 @@ int check_access(uint32 uimm) {
     return 1;
 }
 
-void trap_and_emulate_ecall() {
+int uvmcopy_same_pa(pagetable_t old, pagetable_t new, uint64 sz)
+{
+  pte_t *pte;
+  uint64 pa, i;
+  uint flags;
+
+  for(i = 0; i < sz; i += PGSIZE){
+    if((pte = walk(old, i, 0)) == 0)
+      panic("uvmcopy: pte should exist");
+    if((*pte & PTE_V) == 0)
+      panic("uvmcopy: page not present");
+    pa = PTE2PA(*pte);
+    flags = PTE_FLAGS(*pte);
+    if(mappages(new, i, PGSIZE, pa, flags) != 0){
+      goto err;
+    }
+  }
+  return 0;
+
+ err:
+  uvmunmap(new, 0, i / PGSIZE, 1);
+  return -1;
+}
+
+void redirect_to_guest() {
     struct proc *p = myproc();
-    printf("(EC at %p)\n", p->trapframe->epc);
     vm.sepc = p->trapframe->epc;
     p->trapframe->epc = vm.stvec;
     vm.registers.mode = SUPERVISOR_MODE;
+    vm.sstatus |= SSTATUS_SPP;
+    printf("Redirecting to Guest OS trap handler... 🚁\n");
+}
+
+void trap_and_emulate_ecall() {
+    printf("(EC at %p)\n", myproc()->trapframe->epc);
+    redirect_to_guest();
 }
 
 void trap_and_emulate(void) {
@@ -241,12 +255,20 @@ void trap_and_emulate(void) {
     struct trapframe *tf = p->trapframe;
     uint32 instr;
     if (copyin(p->pagetable, (char *)&instr, tf->epc, sizeof(instr))) {
-        printf("prob\n");
+        printf("Failed to copy instruction from pagetable 😿\n");
+        goto kill;
     }
     // printf("INSTR: %p\n", instr);
 
-    // printf("Checking 1 %x\n", vm.stvec);
-    // printf("Checking 2 %x\n", vm.sepc);
+    if (r_scause() == 12) {
+        printf("Guest OS failed to handle redirect 😐\n");
+        goto kill;
+    }
+
+    if (r_scause() == 13) {
+        printf("Pagefault - PMP 🛡️\n");
+        goto kill;
+    }
 
     uint64 addr     = tf->epc;
     uint32 op       = instr & 0x7F;
@@ -261,34 +283,67 @@ void trap_and_emulate(void) {
     printf("(PI at %p) op = %x, rd = %x, funct3 = %x, rs1 = %x, uimm = %x\n", 
                 addr, op, rd, funct3, rs1, uimm);
 
-    if (!check_access(uimm)) {
-        printf("Illegal register access! 😈\n");
-        printf("Killing Guest OS 🤺\n");
-        setkilled(p);
-        return;
-    }
-
-    if (addr == 0x424) {
-        panic("Stop\n");
+    if (!check_access(uimm, funct3)) {
+        printf("Illegal register access! 👹\n"); // CSE 536: Kill if write on mvendorid
+        goto kill;
+        // redirect_to_guest();
+        // return;
     }
     
     if (op == 0x73) {
-        if (funct3 == 2) { // csrr
+        // csrr
+        if (funct3 == 2) { 
             *reg_mappings(tf, rd) = *csr_mappings[uimm];
             p->trapframe->epc += 4;
-        } else if (funct3 == 1) { // csrw
+        } 
+        // csrw
+        else if (funct3 == 1) {
             *csr_mappings[uimm] = *reg_mappings(tf, rs1);
             p->trapframe->epc += 4;
-        } else { // mret, sret, ecall
-            if (uimm == 0x302) { // mret
+        } 
+        else {
+            // mret
+            if (uimm == 0x302) {
+                if ((vm.mstatus & MSTATUS_MPP_MASK) != MSTATUS_MPP_S) {
+                    printf("Register not set for mret ❌\n");
+                    goto kill;
+                }
                 vm.registers.mode = SUPERVISOR_MODE;
                 p->trapframe->epc = vm.mepc;
-            } else if (uimm == 0x102) { // sret
+                // If PMP enabled
+                int ct = (0x80400000 - vm.pmpaddr0)/PGSIZE;
+                if (vm.pmpcfg0 != 0 && ct > 0) { 
+                    pmp_pagetable = proc_pagetable(p);
+                    uint64 memaddr = 0x80000000;
+                    int sz1;
+                    if((sz1 = uvmalloc(pmp_pagetable, memaddr, memaddr + 1024*PGSIZE, PTE_W)) == 0) {
+                        printf("Error: could not allocate memory at 0x80000000 for PMP.\n");
+                    }
+                    if(uvmcopy_same_pa(p->pagetable, pmp_pagetable, p->sz) < 0) {
+                        printf("Failed to copy pagetable for PMP 😿\n");
+                        printf("Proceeding without PMP...\n");
+                    } else {
+                        uvmunmap(pmp_pagetable, vm.pmpaddr0, ct, 0);
+                        p->pagetable = pmp_pagetable;
+                        p->unmapped_pages = p->unmapped_pages - ct;
+                        printf("No. of pages unmapped during mret: %d\n", ct);
+                    }
+                }
+            }
+            // sret
+            else if (uimm == 0x102) {
+                if ((vm.sstatus & SSTATUS_SPP) != 0) {
+                    printf("Register not set for sret ❌\n");
+                    goto kill;
+                }
                 vm.registers.mode = USER_MODE;
                 p->trapframe->epc = vm.sepc;
-            } else { // ecall
-                p->trapframe->epc = vm.stvec;
             }
         }
     }
+    return;
+
+kill:
+    printf("Killing Guest OS 🤺\n");
+    setkilled(p);
 }

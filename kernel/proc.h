@@ -107,4 +107,5 @@ struct proc {
 
   // CSE 536: track that this is a VM and ecall must be handled differently
   int proc_te_vm;
+  int unmapped_pages;
 };

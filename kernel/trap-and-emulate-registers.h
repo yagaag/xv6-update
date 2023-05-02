@@ -13,6 +13,22 @@
 #define REG_a3          0xd
 #define REG_a4          0xe
 #define REG_a5          0xf
+#define REG_a6          0x10
+#define REG_a7          0x11
+#define REG_s2          0x12
+#define REG_s3          0x13
+#define REG_s4          0x14
+#define REG_s5          0x15
+#define REG_s6          0x16
+#define REG_s7          0x17
+#define REG_s8          0x18
+#define REG_s9          0x19
+#define REG_s10         0x1a
+#define REG_s11         0x1b
+#define REG_t3          0x1c
+#define REG_t4          0x1d
+#define REG_t5          0x1e
+#define REG_t6          0x1f
 
 #define CSR_ustatus     0x0
 #define CSR_uie         0x4
@@ -57,13 +73,6 @@
 #define CSR_mtval2      0x34b
 
 #define CSR_pmpcfg0     0x3a0
-#define CSR_pmpcfg2     0x3a2
-#define CSR_pmpcfg4     0x3a4
-#define CSR_pmpcfg6     0x3a6
-#define CSR_pmpcfg8     0x3a8
-#define CSR_pmpcfg10    0x3aa
-#define CSR_pmpcfg12    0x3ac
-#define CSR_pmpcfg14    0x3ae
 #define CSR_pmpaddr0    0x3b0
 #define CSR_pmpaddr1    0x3b1
 #define CSR_pmpaddr2    0x3b2

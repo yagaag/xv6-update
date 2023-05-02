@@ -136,6 +136,8 @@ exec(char *path, char **argv)
       goto bad;
     }
     printf("Created a VM process and allocated memory region (%p - %p).\n", memaddr, memaddr + 1024*PGSIZE);
+    p->proc_te_vm = 1;
+    p->unmapped_pages = 1024;
   }
 
   return argc; // this ends up in a0, the first argument to main(argc, argv)

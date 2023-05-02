@@ -58,6 +58,11 @@ void usertrapret(void) {
     // Set entry location
     w_sepc((uint64) p.trapframe->epc);
 
+    // test write to mvendorid
+    // asm volatile("csrw mvendorid, %0" : : "r" (0x0));
+    // test read from mvendorid
+    // r_mvendorid();
+
     asm("sret");
 }
 
@@ -71,6 +76,10 @@ void create_process(void) {
 
     // initial stack values
     p.trapframe->a1 = (uint64) ustack+PGSIZE;
+
+    // test PMP write to unmapped area
+    // uint64 *val = (uint64*)0x80300000;
+    // w_satp(*val);
 
     // usertrapret
     usertrapret();
