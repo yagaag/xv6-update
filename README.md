@@ -1,6 +1,6 @@
-# CSE 536: Assignment 2: Process Memory Management
+# CSE 536: On-Demand Memory Allocation
 
-Please refer to the handout on Canvas.
+On-demand memory allocation has practical applications in various systems, such as web servers and cloud computing, where dynamic allocation of memory can lead to better resource utilization and cost efficiency. The primary goal of this feature was to optimize memory usage and improve overall system performance by dynamically allocating memory only when needed. The secondary goal was to prevent wasted resources by deallocating memory that is no longer required.
 
 ## Acknowledgement
 
